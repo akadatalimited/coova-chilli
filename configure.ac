@@ -22,6 +22,20 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
+# Ensure we are using GCC 14 or newer when available
+AC_MSG_CHECKING([for GCC >= 14])
+if test "x$GCC" = "xyes"; then
+  AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([], [[#if __GNUC__ < 14
+#error "GCC version < 14"
+#endif]])],
+    [AC_MSG_RESULT([yes])],
+    [AC_MSG_RESULT([no])
+     AC_MSG_WARN([GCC version < 14 detected; falling back to older compiler support])])
+else
+  AC_MSG_RESULT([not GCC])
+fi
+
 #JJAKO Check for libtool
 LT_INIT
 AC_ARG_PROGRAM
@@ -136,7 +150,7 @@ AC_CHECK_TYPES([ptrdiff_t])
 # Checks for library functions.
 AC_FUNC_CHOWN
 AC_FUNC_FORK
-AC_PROG_GCC_TRADITIONAL
+AC_PROG_CC
 AC_FUNC_MEMCMP
 AC_FUNC_SELECT_ARGTYPES
 AC_FUNC_MKTIME
