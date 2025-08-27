@@ -1012,7 +1012,7 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
                "</AuthenticationReply>\r\n");
       break;
 
-    case REDIR_NOTYET:
+    case REDIR_NOTYET: {
       bcatcstr(b,
                "<Redirect>\r\n"
                "<MessageType>100</MessageType>\r\n"
@@ -1064,6 +1064,7 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
       }
       bcatcstr(b, "</Redirect>\r\n");
       break;
+    }
 
     case REDIR_FAILED_REJECT:
       write_authentication_msg_header(conn,b);
@@ -1152,23 +1153,22 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
       write_authentication_msg_footer(conn,b);
       break;
 
-    case REDIR_CHALLENGE:
-
+    case REDIR_CHALLENGE: {
       bcatcstr(b,
                "<EAPAuthenticationReply>\r\n"
                "<MessageType>121</MessageType>\r\n"
                "<ResponseCode>10</ResponseCode>\r\n");
 
-        struct eapmsg_t eapmsg = conn->authdata.v.eapmsg;
-        if (!base64encoder(&eapmsg,
-                           eap64str, MAX_EAP_LEN*2)){
-          conn->authdata.v.eapmsg = eapmsg;
-          bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
-          bconcat(b, bt);
-        } else {
-          if (_options.debug)
-            syslog(LOG_DEBUG, "%s(%d): Base64 encoding of radius eap message failed", __FUNCTION__, __LINE__);
-        }
+      struct eapmsg_t eapmsg = conn->authdata.v.eapmsg;
+      if (!base64encoder(&eapmsg,
+                         eap64str, MAX_EAP_LEN*2)){
+        conn->authdata.v.eapmsg = eapmsg;
+        bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
+        bconcat(b, bt);
+      } else {
+        if (_options.debug)
+          syslog(LOG_DEBUG, "%s(%d): Base64 encoding of radius eap message failed", __FUNCTION__, __LINE__);
+      }
       bassignformat(bt, "<LoginURL>%s%sres=wispr&amp;uamip=%s&amp;continue=1&amp;uamport=%d&amp;challenge=%s</LoginURL>\r\n",
                     _options.wisprlogin ? _options.wisprlogin : redir->url,
                     strchr(_options.wisprlogin ? _options.wisprlogin : redir->url, '?') ? "&amp;" : "?",
@@ -1177,6 +1177,7 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
 
       bcatcstr(b, "</EAPAuthenticationReply>\r\n");
       break;
+    }
 
     case REDIR_SUCCESS:
       write_authentication_msg_header(conn,b);
@@ -3366,13 +3367,14 @@ int redir_main(struct redir_t *redir,
     httpreq.data_in = rreq->wbuf;
   }
 
-#define redir_memcopy(msgtype)                                          \
-  redir_challenge(challenge);                                           \
-  redir_chartohex(challenge, hexchal, REDIR_MD5LEN);                    \
-  msg.mtype = msgtype;                                                  \
-  memcpy(conn.s_state.redir.uamchal, challenge, REDIR_MD5LEN);          \
-  if (_options.debug)							\
-    syslog(LOG_DEBUG, "%s(%d): ---->>> resetting challenge: %s", __FUNCTION__, __LINE__, hexchal)
+  #define redir_memcopy(msgtype) do { \
+    redir_challenge(challenge); \
+    redir_chartohex(challenge, hexchal, REDIR_MD5LEN); \
+    msg.mtype = msgtype; \
+    memcpy(conn.s_state.redir.uamchal, challenge, REDIR_MD5LEN); \
+    if (_options.debug) \
+      syslog(LOG_DEBUG, "%s(%d): ---->>> resetting challenge: %s", __FUNCTION__, __LINE__, hexchal); \
+  } while (0)
 
 #ifdef USING_IPC_UNIX
 #define redir_msg_send(msgopt)                                          \
