@@ -4335,7 +4335,11 @@ int dhcp_receive_ipv6(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
   struct dhcp_t *this = ctx->parent;
   struct pkt_ethhdr_t *ethh = pkt_ethhdr(pack);
   struct pkt_ip6hdr_t *iphdr = pkt_ip6hdr(pack);
-  
+  struct dhcp_conn_t *conn = NULL;
+
+  /* Attempt to locate connection based on source MAC */
+  dhcp_hashget(this, &conn, ethh->src);
+
   int ip_datalen = (int) ntohs(iphdr->data_len);
   
   if (_options.debug) {
@@ -4489,7 +4493,8 @@ int dhcp_receive_ipv6(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
 
             /* reserved */
             *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
-            memcpy(payload, &conn->v6prefix, sizeof(struct in6_addr));
+            const struct in6_addr *prefix = conn ? &conn->v6prefix : &_options.v6prefix;
+            memcpy(payload, prefix, sizeof(struct in6_addr));
             payload += sizeof(struct in6_addr);
 
             /* Prefix Information option */
