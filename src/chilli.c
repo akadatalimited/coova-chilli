@@ -647,7 +647,8 @@ leaky_bucket(struct app_conn_t *conn,
   uint64_t upbytes=0, dnbytes=0;
   long double timediff;
 
-  timediff = mainclock_diffd(&conn->s_state.last_bw_time);
+  struct timespec last_bw_time = conn->s_state.last_bw_time;
+  timediff = mainclock_diffd(&last_bw_time);
 
   if (conn->s_params.bandwidthmaxup) {
     upbytes = (uint64_t) ((timediff * conn->s_params.bandwidthmaxup) / 8);
@@ -6077,7 +6078,8 @@ int static uam_msg(struct redir_msg_t *msg) {
   }
 #endif
 
-  if (ippool_getip(ippool, &ipm, &msg->mdata.address.sin_addr)) {
+  struct in_addr addr = msg->mdata.address.sin_addr;
+  if (ippool_getip(ippool, &ipm, &addr)) {
     if (_options.debug)
       syslog(LOG_DEBUG, "%s(%d): UAM login with unknown IP address: %s", __FUNCTION__, __LINE__, inet_ntoa(msg->mdata.address.sin_addr));
     return 0;
@@ -6201,7 +6203,8 @@ static struct app_conn_t * find_app_conn(struct cmdsock_request *req,
   struct dhcp_conn_t *dhcpconn = 0;
 
   if (req->ip.s_addr) {
-    appconn = dhcp_get_appconn_ip(0, &req->ip);
+    struct in_addr ip = req->ip;
+    appconn = dhcp_get_appconn_ip(0, &ip);
     if (has_criteria)
       *has_criteria = 1;
   } else {
@@ -7124,10 +7127,12 @@ int static redir_msg(struct redir_t *this) {
       if (msg.mtype == REDIR_MSG_STATUS_TYPE) {
 	struct redir_conn_t conn;
 	memset(&conn, 0, sizeof(conn));
-	if (cb_redir_getstate(redir,
-			      &msg.mdata.address,
-			      &msg.mdata.baddress,
-			      &conn) != -1) {
+        struct sockaddr_in addr = msg.mdata.address;
+        struct sockaddr_in baddr = msg.mdata.baddress;
+        if (cb_redir_getstate(redir,
+                              &addr,
+                              &baddr,
+                              &conn) != -1) {
 	  if (safe_write(socket, &conn, sizeof(conn)) < 0) {
 	    syslog(LOG_ERR, "%s: redir_msg writing", strerror(errno));
 	  }
