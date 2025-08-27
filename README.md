@@ -27,3 +27,17 @@ To get started after cloning git repository:
   `make`
 
 More details about the build process and dependencies are covered in the [INSTALL file](/INSTALL)
+
+## IPv6 Prefix Delegation
+
+CoovaChilli now sends IPv6 router advertisements and can delegate a
+configurable `/64` prefix. Clients obtain addresses via SLAAC, including
+Android devices. Use `--ipv6prefix` to set the base prefix and choose
+between a shared `/64` (`--ipv6shared`) or per-client delegation
+(`--ipv6perclient`).
+
+Example enabling per-client prefixes:
+
+```
+chilli --ipv6 --ipv6prefix 2001:db8:: --ipv6perclient
+```

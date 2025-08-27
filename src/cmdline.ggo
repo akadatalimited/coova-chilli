@@ -294,4 +294,7 @@ option "rfc7710uri" - "DHCP Captive Portal URI. Defaults to http://uamlisten:uam
 option "ipv6" - "Enable IPv6 support" flag off
 option "ipv6mode" - "IPv6 mode is either 6and4 (default), 4to6, or 6to4" string no
 option "ipv6only" - "Enable IPv6-Only" flag off
+option "ipv6prefix" - "IPv6 /64 prefix to delegate" string no
+option "ipv6shared" - "Share a single /64 among clients" flag on
+option "ipv6perclient" - "Delegate unique /64 per client" flag off
 

@@ -26,6 +26,9 @@
 
 struct tun_t *tun;                /* TUN instance            */
 struct ippool_t *ippool;          /* Pool of IP addresses */
+#ifdef ENABLE_IPV6
+struct ippool_t *ippool_v6;       /* Pool of IPv6 prefixes */
+#endif
 struct radius_t *radius;          /* Radius client instance */
 struct dhcp_t *dhcp = NULL;       /* DHCP instance */
 struct redir_t *redir = NULL;     /* Redir instance */
@@ -7454,6 +7457,15 @@ int chilli_main(int argc, char **argv) {
       syslog(LOG_ERR, "Failed to allocate IP pool!");
       exit(1);
     }
+
+#ifdef ENABLE_IPV6
+    if (_options.ipv6 && !_options.ipv6shared) {
+      if (ippool_new6(&ippool_v6, &_options.v6prefix, _options.max_clients)) {
+        syslog(LOG_ERR, "Failed to allocate IPv6 pool!");
+        exit(1);
+      }
+    }
+#endif
 
     /* Create an instance of dhcp */
     if (dhcp_new(&dhcp,
