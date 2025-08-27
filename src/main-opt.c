@@ -509,6 +509,13 @@ int main(int argc, char **argv) {
 #ifdef ENABLE_IPV6
   _options.ipv6 = args_info.ipv6_flag;
   _options.ipv6only = args_info.ipv6only_flag;
+  if (args_info.ipv6prefix_arg)
+    inet_pton(AF_INET6, args_info.ipv6prefix_arg, &_options.v6prefix);
+  _options.ipv6shared = args_info.ipv6shared_flag;
+  if (!args_info.ipv6shared_given)
+    _options.ipv6shared = 1;
+  if (args_info.ipv6perclient_flag)
+    _options.ipv6shared = 0;
   if (args_info.ipv6mode_arg) {
     if (!strcmp(args_info.ipv6mode_arg, "4to6")) {
       _options.ipv6 = 1;

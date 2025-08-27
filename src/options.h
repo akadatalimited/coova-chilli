@@ -75,6 +75,7 @@ struct options_t {
   struct in6_addr dns1_v6;
   struct in6_addr dns2_v6;
   struct in6_addr v6prefix;
+  int ipv6shared;
 #endif
 
   int sndbuf;

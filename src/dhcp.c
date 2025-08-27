@@ -30,6 +30,10 @@ static uint8_t nmac[PKT_ETH_ALEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 static int connections = 0;
 
 extern struct ippool_t *ippool;
+#ifdef ENABLE_IPV6
+extern struct ippool_t *ippool_v6;
+static void slaac_addr(const struct in6_addr *prefix, const uint8_t mac[6], struct in6_addr *out);
+#endif
 
 struct dhcp_ctx {
   struct dhcp_t *parent;
@@ -3615,6 +3619,19 @@ int dhcp_getreq(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
   return 0;
 }
 
+#ifdef ENABLE_IPV6
+static void slaac_addr(const struct in6_addr *prefix, const uint8_t mac[6], struct in6_addr *out) {
+  memcpy(out, prefix, sizeof(struct in6_addr));
+  out->s6_addr[8]  = mac[0] ^ 0x02;
+  out->s6_addr[9]  = mac[1];
+  out->s6_addr[10] = mac[2];
+  out->s6_addr[11] = 0xff;
+  out->s6_addr[12] = 0xfe;
+  out->s6_addr[13] = mac[3];
+  out->s6_addr[14] = mac[4];
+  out->s6_addr[15] = mac[5];
+}
+#endif
 
 /**
  * dhcp_set_addrs()
@@ -3634,7 +3651,16 @@ int dhcp_set_addrs(struct dhcp_conn_t *conn,
 #ifdef ENABLE_IPV6
   conn->dns1_v6 = _options.dns1_v6;
   conn->dns2_v6 = _options.dns2_v6;
-  conn->v6prefix = _options.v6prefix;
+  if (_options.ipv6shared || !ippool_v6) {
+    conn->v6prefix = _options.v6prefix;
+  } else {
+    struct in6_addr p;
+    if (ippool_getip6(ippool_v6, &p) == 0)
+      conn->v6prefix = p;
+    else
+      conn->v6prefix = _options.v6prefix;
+  }
+  slaac_addr(&conn->v6prefix, conn->hismac, &conn->hisip_v6);
 #endif
 
   if (!conn->domain[0] && _options.domain) {
@@ -4460,15 +4486,12 @@ int dhcp_receive_ipv6(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
             v=htonl(345600); /* preferred lifetime */
             memcpy(payload, &v, 4);
             payload += 4;
-            
+
             /* reserved */
             *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
-            
-            *payload++ = 0x11;*payload++ = 0x11;*payload++ = 0;*payload++ = 0;
-            *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
-            *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
-            *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
-            
+            memcpy(payload, &conn->v6prefix, sizeof(struct in6_addr));
+            payload += sizeof(struct in6_addr);
+
             /* Prefix Information option */
             data_len += 32;
             *payload++ = 3;
