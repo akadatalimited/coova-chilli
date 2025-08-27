@@ -189,12 +189,6 @@ uint32_t ippool_hash4(struct in_addr *addr) {
   return lookup((unsigned char *)&addr->s_addr, sizeof(addr->s_addr), 0);
 }
 
-#ifndef IPPOOL_NOIP6
-uint32_t ippool_hash6(struct in6_addr *addr) {
-  return lookup((unsigned char *)addr->u6_addr8, sizeof(addr->u6_addr8), 0);
-}
-#endif
-
 /* Create new address pool */
 int ippool_new(struct ippool_t **this,
 	       char *dyn, int start, int end, char *stat,

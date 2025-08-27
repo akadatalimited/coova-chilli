@@ -27,7 +27,7 @@ uint32_t iphash_hash4(struct in_addr *addr) {
 
 #if (0)
 uint32_t iphash_hash6(struct in6_addr *addr) {
-  return lookup((unsigned char *)addr->u6_addr8, sizeof(addr->u6_addr8), 0);
+  return lookup((unsigned char *)addr->s6_addr, sizeof(addr->s6_addr), 0);
 }
 #endif
 
