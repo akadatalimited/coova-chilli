@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.59])
+AC_PREREQ([2.71])
 AC_INIT([coova-chilli],[1.4],[https://github.com/coova/coova-chilli/issues])
 AC_CONFIG_SRCDIR([src/chilli.c])
 
@@ -16,7 +16,6 @@ AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC
 AC_PROG_CC_C_O
-AC_PROG_CC_C99
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_LN_S
@@ -83,7 +82,6 @@ linux)
 esac
 
 # Checks for header files.
-AC_HEADER_STDC
 AC_HEADER_RESOLV
 AC_CHECK_HEADERS([arpa/inet.h errno.h fcntl.h dirent.h \
 		  inttypes.h limits.h \
@@ -121,7 +119,7 @@ AC_CHECK_HEADERS([resolv.h net/route.h net/if.h net/if_arp.h net/if_tun.h net/et
 ])
 
 AC_CHECK_HEADER(inttypes.h,[AC_DEFINE([JSON_C_HAVE_INTTYPES_H],[1],[Public define for json_inttypes.h])])
-AC_CONFIG_HEADER(json/json_config.h)
+AC_CONFIG_HEADERS([json/json_config.h])
 AC_CHECK_DECLS([INFINITY], [], [], [[#include <math.h>]])
 AC_CHECK_DECLS([nan], [], [], [[#include <math.h>]])
 AC_CHECK_DECLS([isnan], [], [], [[#include <math.h>]])
