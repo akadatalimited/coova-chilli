@@ -1717,7 +1717,7 @@ int dhcp_dns(struct dhcp_conn_t *conn, uint8_t *pack,
     uint16_t nscount = ntohs(dnsp->nscount);
     uint16_t arcount = ntohs(dnsp->arcount);
 
-    uint8_t *dptr = (uint8_t *)dnsp->records;
+    uint8_t *dptr = dns_packet_records(dnsp);
     uint8_t q[512];
 
 #ifdef ENABLE_IPV6
@@ -1950,7 +1950,7 @@ int dhcp_dns(struct dhcp_conn_t *conn, uint8_t *pack,
 
 	int n;
 
-	p = dnsp->records;
+        p = dns_packet_records(dnsp);
 
 #if(_debug_)
 	syslog(LOG_DEBUG, "%s(%d): It was a matching query!\n", __FUNCTION__, __LINE__);
@@ -1997,8 +1997,8 @@ int dhcp_dns(struct dhcp_conn_t *conn, uint8_t *pack,
 	answer_dns->qdcount = htons(0x0001);
 	answer_dns->ancount = htons(0x0001);
 	answer_dns->nscount = htons(0x0000);
-	answer_dns->arcount = htons(0x0000);
-	memcpy(answer_dns->records, query, query_len);
+        answer_dns->arcount = htons(0x0000);
+        memcpy(dns_packet_records(answer_dns), query, query_len);
 
 	/* UDP header */
 	udp_len = query_len + DHCP_DNS_HLEN + PKT_UDP_HLEN;
@@ -2042,7 +2042,7 @@ int dhcp_dns(struct dhcp_conn_t *conn, uint8_t *pack,
       uint8_t b[1500];
       uint8_t *p = an_mark, *bp = b, *bt = b;
       int new_ancount = 0;
-      int len = olen - (an_mark - ((uint8_t *)dnsp->records));
+      int len = olen - (an_mark - dns_packet_records(dnsp));
 
       for (i=0; i < ancount; i++) {
 
@@ -5544,8 +5544,11 @@ int dhcp_relay_decaps(struct dhcp_t *this, int idx) {
   }
 
   if (conn->authstate == DHCP_AUTH_NONE ||
-      conn->authstate == DHCP_AUTH_DNAT)
-    this->cb_request(conn, (struct in_addr *)&packet.yiaddr, 0, 0);
+      conn->authstate == DHCP_AUTH_DNAT) {
+    struct in_addr yiaddr;
+    memcpy(&yiaddr, &packet.yiaddr, sizeof(yiaddr));
+    this->cb_request(conn, &yiaddr, 0, 0);
+  }
 
   packet.giaddr = 0;
 

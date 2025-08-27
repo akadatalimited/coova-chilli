@@ -4270,7 +4270,7 @@ int redir_main(struct redir_t *redir,
     answer_dns->nscount = htons(0x0000);
     answer_dns->arcount = htons(0x0000);
 
-    memcpy(answer_dns->records, query, query_len);
+    memcpy(dns_packet_records(answer_dns), query, query_len);
 
     /* UDP header */
     udp_len = query_len + DHCP_DNS_HLEN + PKT_UDP_HLEN;
