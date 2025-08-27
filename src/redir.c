@@ -1048,12 +1048,14 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
       bconcat(b, bt);
 
       /* Create an EAP identity message */
-      eapidentityreq(&(conn->authdata.v.eapmsg),
+      struct eapmsg_t eapmsg = conn->authdata.v.eapmsg;
+      eapidentityreq(&eapmsg,
                      ++conn->s_state.redir.eap_identity);
 
-      if (!base64encoder(&(conn->authdata.v.eapmsg),
+      if (!base64encoder(&eapmsg,
                          eap64str, MAX_EAP_LEN*2)){
-        /*	syslog(LOG_DEBUG, "Encoded radius eap msg: %s", eap64str);  */
+        conn->authdata.v.eapmsg = eapmsg;
+        /*      syslog(LOG_DEBUG, "Encoded radius eap msg: %s", eap64str);  */
         bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
         bconcat(b, bt);
       } else {
@@ -1157,15 +1159,16 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
                "<MessageType>121</MessageType>\r\n"
                "<ResponseCode>10</ResponseCode>\r\n");
 
-      if (!base64encoder(&(conn->authdata.v.eapmsg),
-                         eap64str, MAX_EAP_LEN*2)){
-        bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
-        bconcat(b, bt);
-      } else {
-        if (_options.debug)
-          syslog(LOG_DEBUG, "%s(%d): Base64 encoding of radius eap message failed", __FUNCTION__, __LINE__);
-      }
-
+        struct eapmsg_t eapmsg = conn->authdata.v.eapmsg;
+        if (!base64encoder(&eapmsg,
+                           eap64str, MAX_EAP_LEN*2)){
+          conn->authdata.v.eapmsg = eapmsg;
+          bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
+          bconcat(b, bt);
+        } else {
+          if (_options.debug)
+            syslog(LOG_DEBUG, "%s(%d): Base64 encoding of radius eap message failed", __FUNCTION__, __LINE__);
+        }
       bassignformat(bt, "<LoginURL>%s%sres=wispr&amp;uamip=%s&amp;continue=1&amp;uamport=%d&amp;challenge=%s</LoginURL>\r\n",
                     _options.wisprlogin ? _options.wisprlogin : redir->url,
                     strchr(_options.wisprlogin ? _options.wisprlogin : redir->url, '?') ? "&amp;" : "?",
@@ -1181,18 +1184,20 @@ void redir_wispr2_reply (struct redir_t *redir, struct redir_conn_t *conn,
       bcatcstr(b,
                "<ResponseCode>50</ResponseCode>\r\n");
 
-      if (conn->authdata.type == REDIR_AUTH_EAP) {
-        if (!base64encoder(&(conn->authdata.v.eapmsg),
-                           eap64str, MAX_EAP_LEN*2)){
-          if (_options.debug)
-            syslog(LOG_DEBUG, "%s(%d): Encoded radius eap msg: %s", __FUNCTION__, __LINE__, eap64str);
-          bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
-          bconcat(b, bt);
-        } else {
-          if (_options.debug)
-            syslog(LOG_DEBUG, "%s(%d): Base64 encoding of radius eap message failed", __FUNCTION__, __LINE__);
+        if (conn->authdata.type == REDIR_AUTH_EAP) {
+          struct eapmsg_t eapmsg = conn->authdata.v.eapmsg;
+          if (!base64encoder(&eapmsg,
+                             eap64str, MAX_EAP_LEN*2)){
+            conn->authdata.v.eapmsg = eapmsg;
+            if (_options.debug)
+              syslog(LOG_DEBUG, "%s(%d): Encoded radius eap msg: %s", __FUNCTION__, __LINE__, eap64str);
+            bassignformat(bt, "<EAPMsg>%s</EAPMsg>\r\n", eap64str);
+            bconcat(b, bt);
+          } else {
+            if (_options.debug)
+              syslog(LOG_DEBUG, "%s(%d): Base64 encoding of radius eap message failed", __FUNCTION__, __LINE__);
+          }
         }
-      }
 
       /* Add the logoff URL */
       bassignformat(bt, "<LogoffURL>http://%s:%d/logoff</LogoffURL>\r\n",
@@ -2414,36 +2419,38 @@ static int redir_getreq(struct redir_t *redir, struct redir_socket_t *sock,
               return 0;
             }
 
-            rc = base64decoder((char *)  bt->data,
-                               &(conn->authdata.v.eapmsg));
+              struct eapmsg_t eapmsg;
+              rc = base64decoder((char *)  bt->data,
+                                 &eapmsg);
 
-            if (rc == 1) {
-              syslog(LOG_ERR, "EAP message is too big, max allowed 1265 bytes");
-              conn->response = REDIR_FAILED_MTU;
-              bdestroy(bt);
-              return 0;
+              if (rc == 1) {
+                syslog(LOG_ERR, "EAP message is too big, max allowed 1265 bytes");
+                conn->response = REDIR_FAILED_MTU;
+                bdestroy(bt);
+                return 0;
+              }
+
+              if (rc == 2) {
+                syslog(LOG_ERR, "Invalid EAP message encoding");
+                conn->response = REDIR_ERROR_PROTOCOL;
+                bdestroy(bt);
+                return 0;
+              }
+
+              if (_options.debug) {
+                char buffer[eapmsg.len*2+1];
+                bytetohex(eapmsg.data,
+                          eapmsg.len, buffer,
+                          eapmsg.len*2+1);
+                if (_options.debug)
+                  syslog(LOG_DEBUG, "%s(%d): decoded eap message from WISPr request (%d): %s", __FUNCTION__, __LINE__,
+                         eapmsg.len, buffer);
+              }
+
+              conn->authdata.v.eapmsg = eapmsg;
+              conn->authdata.type = REDIR_AUTH_EAP;
             }
-
-            if (rc == 2) {
-              syslog(LOG_ERR, "Invalid EAP message encoding");
-              conn->response = REDIR_ERROR_PROTOCOL;
-              bdestroy(bt);
-              return 0;
-            }
-
-            if (_options.debug) {
-              char buffer[conn->authdata.v.eapmsg.len*2+1];
-              bytetohex(conn->authdata.v.eapmsg.data,
-                        conn->authdata.v.eapmsg.len, buffer,
-                        conn->authdata.v.eapmsg.len*2+1);
-              if (_options.debug)
-                syslog(LOG_DEBUG, "%s(%d): decoded eap message from WISPr request (%d): %s", __FUNCTION__, __LINE__,
-                       conn->authdata.v.eapmsg.len, buffer);
-            }
-
-            conn->authdata.type = REDIR_AUTH_EAP;
           }
-        }
 
         if (conn->authdata.type == REDIR_AUTH_NONE) {
           if (_options.debug)
@@ -2890,13 +2897,14 @@ static int redir_radius(struct redir_t *redir, struct in_addr *addr,
       return -1;
   }
 
-  chilli_req_attrs(radius, &radius_pack,
-		   ACCT_USER,
-		   _options.framedservice ? RADIUS_SERVICE_TYPE_FRAMED :
-		   RADIUS_SERVICE_TYPE_LOGIN, 0,
-		   conn->nasport, conn->hismac,
-		   &conn->hisip,
-		   &conn->s_state);
+    struct in_addr hisip = conn->hisip;
+    chilli_req_attrs(radius, &radius_pack,
+                     ACCT_USER,
+                     _options.framedservice ? RADIUS_SERVICE_TYPE_FRAMED :
+                     RADIUS_SERVICE_TYPE_LOGIN, 0,
+                     conn->nasport, conn->hismac,
+                     &hisip,
+                     &conn->s_state);
 
   snprintf(url, sizeof(url), "http://%s:%d/logoff",
                 inet_ntoa(redir->addr), redir->port);
@@ -3342,6 +3350,7 @@ int redir_main(struct redir_t *redir,
   struct redir_conn_t conn;
   struct redir_socket_t socket;
   struct redir_httpreq_t httpreq;
+  struct in_addr hisip;
 
   /* We are forked when the redir_request is null */
   int forked = (rreq == 0);
@@ -3530,6 +3539,8 @@ int redir_main(struct redir_t *redir,
         syslog(LOG_DEBUG, "%s(%d): Error calling get_req. Terminating %d", __FUNCTION__, __LINE__, err);
       return redir_main_exit(&socket, forked, rreq);
   }
+
+  hisip = conn.hisip;
 
 #if(_debug_ > 1)
   if (_options.debug)
@@ -3913,7 +3924,7 @@ int redir_main(struct redir_t *redir,
           redir_reply(redir, &socket, &conn, REDIR_ALREADY, NULL, 0,
                       NULL, NULL, conn.s_state.redir.userurl, NULL,
                       (char *)conn.s_params.url, conn.hismac,
-                      &conn.hisip, httpreq.qs);
+                      &hisip, httpreq.qs);
 
           return redir_main_exit(&socket, forked, rreq);
         }
@@ -3932,7 +3943,7 @@ int redir_main(struct redir_t *redir,
 
         redir_reply(redir, &socket, &conn, REDIR_FAILED_OTHER, NULL,
                     0, hexchal, NULL, NULL, NULL,
-                    0, conn.hismac, &conn.hisip, httpreq.qs);
+                    0, conn.hismac, &hisip, httpreq.qs);
 
         return redir_main_exit(&socket, forked, rreq);
       }
@@ -4021,7 +4032,7 @@ int redir_main(struct redir_t *redir,
                     conn.s_state.redir.username,
                     conn.s_state.redir.userurl, conn.reply,
                     (char *)conn.s_params.url,
-                    conn.hismac, &conn.hisip, httpreq.qs);
+                    conn.hismac, &hisip, httpreq.qs);
 
         /* set params and redir data */
         redir_msg_send(REDIR_MSG_OPT_REDIR | REDIR_MSG_OPT_PARAMS);
@@ -4044,7 +4055,7 @@ int redir_main(struct redir_t *redir,
                     NULL,
                     0, hexchal, NULL, conn.s_state.redir.userurl, conn.reply,
                     (char *)conn.s_params.url, conn.hismac,
-                    &conn.hisip, httpreq.qs);
+                    &hisip, httpreq.qs);
 
         /* set params, redir data, and reset session-id */
         redir_msg_send(REDIR_MSG_OPT_REDIR | REDIR_MSG_OPT_PARAMS |
@@ -4065,7 +4076,7 @@ int redir_main(struct redir_t *redir,
 
         redir_reply(redir, &socket, &conn, REDIR_LOGOFF, NULL, 0,
                     hexchal, NULL, conn.s_state.redir.userurl, NULL,
-                    NULL, conn.hismac, &conn.hisip, httpreq.qs);
+                    NULL, conn.hismac, &hisip, httpreq.qs);
 
         return redir_main_exit(&socket, forked, rreq);
       }
@@ -4091,12 +4102,12 @@ int redir_main(struct redir_t *redir,
         redir_reply(redir, &socket, &conn, REDIR_ALREADY,
                     NULL, 0, NULL, NULL, conn.s_state.redir.userurl, NULL,
                     (char *)conn.s_params.url, conn.hismac,
-                    &conn.hisip, httpreq.qs);
+                    &hisip, httpreq.qs);
       }
       else {
         redir_reply(redir, &socket, &conn, REDIR_NOTYET,
                     NULL, 0, hexchal, NULL, conn.s_state.redir.userurl, NULL,
-                    NULL, conn.hismac, &conn.hisip, httpreq.qs);
+                    NULL, conn.hismac, &hisip, httpreq.qs);
       }
       return redir_main_exit(&socket, forked, rreq);
 
@@ -4104,7 +4115,7 @@ int redir_main(struct redir_t *redir,
       if (state == 1) {
         redir_reply(redir, &socket, &conn, REDIR_ABORT_NAK,
                     NULL, 0, NULL, NULL, conn.s_state.redir.userurl, NULL,
-                    NULL, conn.hismac, &conn.hisip, httpreq.qs);
+                    NULL, conn.hismac, &hisip, httpreq.qs);
       }
       else {
         redir_memcopy(REDIR_ABORT);
@@ -4112,7 +4123,7 @@ int redir_main(struct redir_t *redir,
 
         redir_reply(redir, &socket, &conn, REDIR_ABORT_ACK,
                     NULL, 0, hexchal, NULL, conn.s_state.redir.userurl, NULL,
-                    NULL, conn.hismac, &conn.hisip, httpreq.qs);
+                    NULL, conn.hismac, &hisip, httpreq.qs);
       }
       return redir_main_exit(&socket, forked, rreq);
 
@@ -4144,7 +4155,7 @@ int redir_main(struct redir_t *redir,
         redir_reply(redir, &socket, &conn, REDIR_STATUS, NULL, timeleft,
                     hexchal, conn.s_state.redir.username,
                     conn.s_state.redir.userurl, conn.reply,
-                    0, conn.hismac, &conn.hisip, httpreq.qs);
+                    0, conn.hismac, &hisip, httpreq.qs);
 
         return redir_main_exit(&socket, forked, rreq);
       }
@@ -4276,7 +4287,7 @@ int redir_main(struct redir_t *redir,
     answer_iph->protocol = 0x11;
     answer_iph->check = 0; /* Calculate at end of packet */
     memcpy(&answer_iph->daddr, &_options.dns1.s_addr, PKT_IP_ALEN);
-    memcpy(&answer_iph->saddr, &conn.hisip.s_addr, PKT_IP_ALEN);
+    memcpy(&answer_iph->saddr, &hisip.s_addr, PKT_IP_ALEN);
 
     /* Ethernet header
        memcpy(answer_ethh->dst, &ethh->src, PKT_ETH_ALEN);
@@ -4345,7 +4356,7 @@ int redir_main(struct redir_t *redir,
 
     redir_buildurl(&conn, url, redir, resp, 0, hexchal, NULL,
 		   conn.s_state.redir.userurl, NULL, NULL,
-		   conn.hismac, &conn.hisip);
+		   conn.hismac, &hisip);
     redir_urlencode(url, urlenc);
 
     bassignformat(url, "%s%cloginurl=", base_url,
@@ -4356,7 +4367,7 @@ int redir_main(struct redir_t *redir,
     redir_reply(redir, &socket, &conn,
 		splash ? REDIR_SPLASH : REDIR_NOTYET, url,
 		0, hexchal, NULL, conn.s_state.redir.userurl, NULL,
-		NULL, conn.hismac, &conn.hisip, httpreq.qs);
+		NULL, conn.hismac, &hisip, httpreq.qs);
 
     bdestroy(url);
     bdestroy(urlenc);
@@ -4365,13 +4376,13 @@ int redir_main(struct redir_t *redir,
     redir_reply(redir, &socket, &conn,
 		splash ? REDIR_SPLASH : REDIR_ALREADY, NULL, 0,
 		splash ? hexchal : NULL, NULL, conn.s_state.redir.userurl, NULL,
-		(char *)conn.s_params.url, conn.hismac, &conn.hisip, httpreq.qs);
+		(char *)conn.s_params.url, conn.hismac, &hisip, httpreq.qs);
   }
   else {
     redir_reply(redir, &socket, &conn,
 		splash ? REDIR_SPLASH : REDIR_NOTYET, NULL,
 		0, hexchal, NULL, conn.s_state.redir.userurl, NULL,
-		NULL, conn.hismac, &conn.hisip, httpreq.qs);
+		NULL, conn.hismac, &hisip, httpreq.qs);
   }
 
   return redir_main_exit(&socket, forked, rreq);
