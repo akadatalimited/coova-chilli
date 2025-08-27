@@ -36,10 +36,16 @@
    in RFC2373.
 */
 
-#define IPPOOL_NOIP6
-
 #include "system.h"
 #include "lookup.h"
+
+/*
+ * IPv6 support is enabled when ENABLE_IPV6 is defined.  Keep legacy
+ * behaviour (IPv4 only) otherwise by defining IPPOOL_NOIP6.
+ */
+#ifndef ENABLE_IPV6
+#define IPPOOL_NOIP6
+#endif
 
 struct ippoolm_t;                /* Forward declaration */
 
@@ -60,13 +66,19 @@ struct ippool_t {
   struct ippoolm_t *lastdyn;     /* Pointer to last free dynamic member */
   struct ippoolm_t *firststat;   /* Pointer to first free static member */
   struct ippoolm_t *laststat;    /* Pointer to last free static member */
+
+#ifndef IPPOOL_NOIP6
+  /* Simple IPv6 pool */
+  struct in6_addr base6;         /* Base IPv6 address of pool */
+  int pool6_size;                /* Number of IPv6 addresses in pool */
+  char *pool6_used;              /* Usage bitmap for IPv6 addresses */
+#endif
 };
 
 struct ippoolm_t {
-#ifndef IPPOOL_NOIP6
-  struct in6_addr addr;          /* IP address of this member */
-#else
   struct in_addr addr;           /* IP address of this member */
+#ifndef IPPOOL_NOIP6
+  struct in6_addr addr6;         /* IPv6 address of this member */
 #endif
   char in_use;                   /* 0=available; 1= used */
   char is_static;                /* 0= dynamic; 1 = static */
@@ -104,7 +116,7 @@ extern int ippool_freeip(struct ippool_t *this, struct ippoolm_t *member);
 
 /* Get net and mask based on ascii string */
 extern int ippool_aton(struct in_addr *addr, struct in_addr *mask,
-		       char *pool, int number);
+                       char *pool, int number);
 
 int ippool_hashadd(struct ippool_t *this, struct ippoolm_t *member);
 
@@ -112,6 +124,7 @@ int ippool_print(int fd, struct ippool_t *this);
 
 #ifndef IPPOOL_NOIP6
 extern uint32_t ippool_hash6(struct in6_addr *addr);
+extern int ippool_new6(struct ippool_t **this, struct in6_addr *start, int size);
 extern int ippool_getip6(struct ippool_t *this, struct in6_addr *addr);
 extern int ippool_returnip6(struct ippool_t *this, struct in6_addr *addr);
 #endif
