@@ -28,7 +28,18 @@ To get started after cloning git repository:
 
 More details about the build process and dependencies are covered in the [INSTALL file](/INSTALL)
 
-## IPv6 Prefix Delegation
+## IPv6 Support
+
+CoovaChilli now provides full IPv6 support including:
+
+- **SLAAC Support** - Complete Router Advertisement with RDNSS
+- **DHCPv6** - Full DHCPv6 server functionality for address assignment
+- **ND-Proxy** - Neighbor Discovery Proxy for proper IPv6 neighbor handling
+- **Dual-Stack Accounting** - Full RADIUS accounting for both IPv4 and IPv6 sessions
+- **IPv6 Walled Garden** - Extended walled garden support for IPv6 addresses and networks
+- **DNS Interception** - IPv6 DNS query interception and handling
+
+### IPv6 Prefix Delegation
 
 CoovaChilli now sends IPv6 router advertisements and can delegate a
 configurable `/64` prefix. Clients obtain addresses via SLAAC, including
@@ -41,3 +52,11 @@ Example enabling per-client prefixes:
 ```
 chilli --ipv6 --ipv6prefix 2001:db8:: --ipv6perclient
 ```
+
+### IPv6 Configuration Options
+
+Additional IPv6 configuration options include:
+- `--ipv6only` - Enable IPv6-only mode
+- `--ipv6to4` - Enable IPv6-to-IPv4 translation
+- `--ipv4to6` - Enable IPv4-to-IPv6 translation
+- `--ipv6mode` - Set IPv6 mode (6and4, 4to6, or 6to4)

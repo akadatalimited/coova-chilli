@@ -1187,6 +1187,8 @@ void session_interval(struct app_conn_t *conn) {
 #endif
 }
 
+static time_t last_ra_time = 0;
+
 static int checkconn(void) {
   struct app_conn_t *conn;
   struct dhcp_conn_t* dhcpconn;
@@ -1205,6 +1207,14 @@ static int checkconn(void) {
     return 0;
 
   checktime = mainclock.tv_sec;
+
+#ifdef ENABLE_IPV6
+  /* Send periodic Router Advertisements every 30 seconds if IPv6 is enabled */
+  if (_options.ipv6 && (mainclock.tv_sec - last_ra_time) >= 30) {
+    /* TODO: Send periodic RAs to all connected clients */
+    last_ra_time = mainclock.tv_sec;
+  }
+#endif
 
   if (admin_session.s_state.authenticated) {
     session_interval(&admin_session);

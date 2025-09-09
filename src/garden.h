@@ -30,12 +30,19 @@ typedef struct pass_through_t {
 #ifdef ENABLE_GARDENEXT
   time_t expiry;
 #endif
+#ifdef ENABLE_IPV6
+  struct in6_addr host_v6;          /* IPv6 address or network */
+  uint8_t is_v6;                    /* Flag indicating IPv6 */
+#endif
 } pass_through;
 
 #define pt_equal(a,b) (                         \
-    (a)->host.s_addr == (b)->host.s_addr &&     \
-    (a)->mask.s_addr == (b)->mask.s_addr &&     \
-    (a)->proto       == (b)->proto       &&     \
+    ((a)->is_v6 == (b)->is_v6) &&               \
+    ((a)->is_v6 ?                               \
+     (memcmp(&(a)->host_v6, &(b)->host_v6, sizeof(struct in6_addr)) == 0) : \
+     ((a)->host.s_addr == (b)->host.s_addr &&   \
+      (a)->mask.s_addr == (b)->mask.s_addr)) && \
+    (a)->proto       == (b)->proto &&           \
     (a)->port        == (b)->port)
 
 #ifdef ENABLE_CHILLIREDIR

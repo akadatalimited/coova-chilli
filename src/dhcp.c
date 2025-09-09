@@ -4480,38 +4480,47 @@ int dhcp_receive_ipv6(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
             
             /* Prefix Information option */
             data_len += 32;
-            *payload++ = 3;
-            *payload++ = 4;
-            *payload++ = 64;
-            *payload++ = (1<<6)|(1<<7);
-            v=htonl(345600); /* valid lifetime */
+            *payload++ = 3;  /* Type = Prefix Information */
+            *payload++ = 4;  /* Length = 4 (32 bytes) */
+            *payload++ = 64; /* Prefix Length = 64 */
+            *payload++ = (1<<6)|(1<<7); /* L=1, A=1 (On-link, Autonomous) */
+            v = htonl(345600); /* Valid Lifetime (4 days) */
             memcpy(payload, &v, 4);
             payload += 4;
-            v=htonl(345600); /* preferred lifetime */
+            v = htonl(345600); /* Preferred Lifetime (4 days) */
             memcpy(payload, &v, 4);
             payload += 4;
 
-            /* reserved */
-            *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
+            /* Reserved */
+            *payload++ = 0; *payload++ = 0; *payload++ = 0; *payload++ = 0;
             const struct in6_addr *prefix = conn ? &conn->v6prefix : &_options.v6prefix;
             memcpy(payload, prefix, sizeof(struct in6_addr));
             payload += sizeof(struct in6_addr);
 
-            /* Prefix Information option */
-            data_len += 32;
-            *payload++ = 3;
-            *payload++ = 4;
-            *payload++ = 64;
-            *payload++ = (1<<6)|(1<<7);
-            v=htonl(_options.mtu);
-            memcpy(payload, &v, 4);
-            payload += 4;
-            v=htonl(_options.mtu);
-            memcpy(payload, &v, 4);
-            payload += 4;
-            *payload++ = 0;*payload++ = 0;*payload++ = 0;*payload++ = 0;
-            
-            ipv6_nat64_prefix(payload);
+#ifdef ENABLE_IPV6
+            /* Add RDNSS (Recursive DNS Server) option if DNS servers are configured */
+            if (_options.dns1.s_addr != 0 || memcmp(&_options.dns1_v6, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16) != 0) {
+              /* RDNSS option */
+              data_len += 24;  /* 8 bytes header + 16 bytes for 1 IPv6 address */
+              *payload++ = 25; /* Type = RDNSS */
+              *payload++ = 3;  /* Length = 3 (24 bytes) */
+              *payload++ = 0;  /* Reserved */
+              *payload++ = 0;  /* Reserved */
+              v = htonl(345600); /* Lifetime (4 days) */
+              memcpy(payload, &v, 4);
+              payload += 4;
+              
+              /* Add IPv6 DNS server address */
+              if (memcmp(&_options.dns1_v6, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16) != 0) {
+                memcpy(payload, &_options.dns1_v6, sizeof(struct in6_addr));
+              } else {
+                /* Convert IPv4 DNS to IPv6 using NAT64 format */
+                uint8_t *p = (uint8_t *)&_options.dns1.s_addr;
+                ipv6_nat64_pack(payload, p);
+              }
+              payload += sizeof(struct in6_addr);
+            }
+#endif
             
             packet_ip6h->ver_class_label = iphdr->ver_class_label;
             packet_ip6h->next_header = iphdr->next_header;
@@ -4560,14 +4569,18 @@ int dhcp_receive_ipv6(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
 	  payload = ((uint8_t *)packet_ip6h) + sizeof(struct pkt_ip6hdr_t);
 	  packet_icmp = (struct pkt_icmphdr_t *) payload;
 
-	  packet_icmp->type = 136;
+	  packet_icmp->type = 136;  /* Neighbor Advertisement */
 	  packet_icmp->code = 0;
 	  packet_icmp->check = 0;
 
-	  data_len = 24;
+	  data_len = 24;  /* 4 bytes flags + 16 bytes target address + 4 bytes reserved */
 
-	  payload += sizeof(struct pkt_icmphdr_t);
-	  *payload++ = (1<<6)|(1<<5);
+	  /* Set NA flags: 
+	   * Bit 31 (0x80000000) - Router flag (0)
+	   * Bit 30 (0x40000000) - Solicited flag (1)
+	   * Bit 29 (0x20000000) - Override flag (1)
+	   */
+	  *payload++ = (1<<6)|(1<<5);  /* Solicited=1, Override=1 */
 	  *payload++ = 0;
 	  *payload++ = 0;
 	  *payload++ = 0;
@@ -4577,8 +4590,8 @@ int dhcp_receive_ipv6(struct dhcp_ctx *ctx, uint8_t *pack, size_t len) {
 
 	  /* Target link-layer address option */
 	  data_len += 2 + PKT_ETH_ALEN;
-	  *payload++ = 2;
-	  *payload++ = 1;
+	  *payload++ = 2;  /* Type = Target Link-Layer Address */
+	  *payload++ = 1;  /* Length = 1 (8 bytes) */
 	  memcpy(payload, dhcp_nexthop(dhcp), PKT_ETH_ALEN);
 
 	  packet_ip6h->ver_class_label = iphdr->ver_class_label;
