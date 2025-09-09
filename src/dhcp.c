@@ -5557,8 +5557,12 @@ int dhcp_relay_decaps(struct dhcp_t *this, int idx) {
   }
 
   if (conn->authstate == DHCP_AUTH_NONE ||
-      conn->authstate == DHCP_AUTH_DNAT)
-    this->cb_request(conn, (struct in_addr *)&packet.yiaddr, 0, 0);
+      conn->authstate == DHCP_AUTH_DNAT) {
+    /* Fix alignment warning by copying the packed member */
+    struct in_addr yiaddr_copy;
+    memcpy(&yiaddr_copy, &packet.yiaddr, sizeof(struct in_addr));
+    this->cb_request(conn, &yiaddr_copy, 0, 0);
+  }
 
   packet.giaddr = 0;
 

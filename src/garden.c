@@ -354,7 +354,11 @@ int garden_check(pass_through *ptlist, uint32_t *pcnt,
       /* For IPv6, we need to check against IPv6 addresses */
       /* This is a simplified check - in a real implementation, 
          we would need to properly handle IPv6 prefixes */
-      struct in6_addr *target_addr = (dst ? (struct in6_addr*)&ipph->daddr : (struct in6_addr*)&ipph->saddr);
+      struct in6_addr daddr_copy, saddr_copy;
+      struct in6_addr *target_addr;
+      memcpy(&daddr_copy, &ipph->daddr, sizeof(struct in6_addr));
+      memcpy(&saddr_copy, &ipph->saddr, sizeof(struct in6_addr));
+      target_addr = (dst ? &daddr_copy : &saddr_copy);
       if (memcmp(&pt->host_v6, target_addr, sizeof(struct in6_addr)) == 0) {
 	if (pt->proto == 0 || ipph->protocol == pt->proto)
 	  if (pt->port == 0 ||
