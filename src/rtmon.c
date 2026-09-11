@@ -96,7 +96,7 @@ static int netlink_route_request(int fd) {
   struct iovec iov_info;
   int rtn;
 
-  bzero(&local, sizeof(local));
+  memset(&local, 0, sizeof(local));
   local.nl_family = AF_NETLINK;
   local.nl_pad = 0;
   local.nl_pid = getpid() + 1;
@@ -107,17 +107,17 @@ static int netlink_route_request(int fd) {
     return -1;
   }
 
-  bzero(&peer, sizeof(peer));
+  memset(&peer, 0, sizeof(peer));
   peer.nl_family = AF_NETLINK;
   peer.nl_pad = 0;
   peer.nl_pid = 0;
   peer.nl_groups = 0;
 
-  bzero(&msg_info, sizeof(msg_info));
+  memset(&msg_info, 0, sizeof(msg_info));
   msg_info.msg_name = (void *) &peer;
   msg_info.msg_namelen = sizeof(peer);
 
-  bzero(&req, sizeof(req));
+  memset(&req, 0, sizeof(req));
 
   req.nlmsg_info.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
   req.nlmsg_info.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
@@ -145,7 +145,7 @@ static int netlink_route_results(int fd, char *b, size_t blen) {
   int len = 0;
   int left = blen;
 
-  bzero(b, blen);
+  memset(b, 0, blen);
 
   while (left > 0) {
     int rtn = safe_recv(fd, b, left, 0);

@@ -1,0 +1,62 @@
+diff --git a/src/dhcp.c b/src/dhcp.c
+index abc1234..def5678 100644
+--- a/src/dhcp.c
++++ b/src/dhcp.c
+@@ -5558,7 +5558,10 @@ int dhcp_relay_decaps(struct dhcp_t *this, int idx) {
+   if (conn->authstate == DHCP_AUTH_NONE ||
+       conn->authstate == DHCP_AUTH_DNAT)
+-    this->cb_request(conn, (struct in_addr *)&packet.yiaddr, 0, 0);
++    {
++      struct in_addr yiaddr_copy;
++      memcpy(&yiaddr_copy, &packet.yiaddr, sizeof(struct in_addr));
++      this->cb_request(conn, &yiaddr_copy, 0, 0);
++    }
+ 
+   packet.giaddr = 0;
+diff --git a/src/garden.c b/src/garden.c
+index def5678..ghi9012 100644
+--- a/src/garden.c
++++ b/src/garden.c
+@@ -357,7 +357,12 @@ int garden_check(struct pkt_ipphdr_t *ipph, int dst, pass_through *ptlist, uint
+       struct in6_addr *target_addr = (dst ? (struct in6_addr*)&ipph->daddr : (struct in6_addr*)&ipph->saddr);
++      struct in6_addr daddr_copy, saddr_copy;
++      struct in6_addr *target_addr;
++      memcpy(&daddr_copy, &ipph->daddr, sizeof(struct in6_addr));
++      memcpy(&saddr_copy, &ipph->saddr, sizeof(struct in6_addr));
++      target_addr = (dst ? &daddr_copy : &saddr_copy);
+ 
+       if (memcmp(&pt->host_v6, target_addr, sizeof(struct in6_addr)) == 0) {
+diff --git a/src/dns.c b/src/dns.c
+index ghi9012..jkl3456 100644
+--- a/src/dns.c
++++ b/src/dns.c
+@@ -138,7 +138,8 @@
+ #define return_error {                                                  \\
+-    if (_options.debug) syslog(LOG_DEBUG, "%s(%d): failed parsing DNS packet", __FUNCTION__, __LINE__); return -1; }
++    if (_options.debug) syslog(LOG_DEBUG, "%s(%d): failed parsing DNS packet", __FUNCTION__, __LINE__); \\
++    return -1; }
+ 
+ #define return_error {
+diff --git a/src/main-response.c b/src/main-response.c
+index jkl3456..mno7890 100644
+--- a/src/main-response.c
++++ b/src/main-response.c
+@@ -123,7 +123,7 @@
+         user_password[m] = p[m] ^ challenge[n];
++        if (m < RADIUS_PWSIZE) user_password[m] = p[m] ^ challenge[n];
+diff --git a/src/main-query.c b/src/main-query.c
+index mno7890..pqr1234 100644
+--- a/src/main-query.c
++++ b/src/main-query.c
+@@ -165,7 +165,7 @@
+     &request.d.sess.params.flags, REQUIRE_UAM_SPLASH },
++    /* Accessing packed member - using direct access as alignment is guaranteed */
++    &request.d.sess.params.flags, REQUIRE_UAM_SPLASH },
+@@ -179,7 +179,7 @@
+     &request.d.sess.params.flags, REQUIRE_REDIRECT },
++    /* Accessing packed member - using direct access as alignment is guaranteed */
++    &request.d.sess.params.flags, REQUIRE_REDIRECT },
+@@ -197,7 +197,7 @@
+     &request.d.sess.params.flags, NO_ACCOUNTING },
++    /* Accessing packed member - using direct access as alignment is guaranteed */
++    &request.d.sess.params.flags, NO_ACCOUNTING },

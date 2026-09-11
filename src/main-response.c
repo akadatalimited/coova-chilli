@@ -122,7 +122,8 @@ int main(int argc, char **argv) {
 
     for (m=0; m < plen;) {
       for (n=0; n < REDIR_MD5LEN; m++, n++) {
-	user_password[m] = p[m] ^ challenge[n];
+	
+        if (m < RADIUS_PWSIZE) user_password[m] = p[m] ^ challenge[n];
       }
     }
 

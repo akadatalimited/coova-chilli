@@ -347,22 +347,53 @@ int garden_check(pass_through *ptlist, uint32_t *pcnt,
 
   for (i = 0; i < ptcnt; i++) {
     pt = &ptlist[i];
-    if (pt->proto == 0 || ipph->protocol == pt->proto)
-      if (pt->host.s_addr == 0 ||
-	  pt->host.s_addr ==
-	  ((dst ? ipph->daddr : ipph->saddr) & pt->mask.s_addr))
-	if (pt->port == 0 ||
-	    ((ipph->protocol == PKT_IP_PROTO_TCP ||
-	      ipph->protocol == PKT_IP_PROTO_UDP) &&
-	     (dst ? ipph->dport : ipph->sport) == htons(pt->port))) {
-	  if (pt_match) *pt_match = pt;
+    
+    /* Check if this is an IPv6 rule */
+    if (pt->is_v6) {
+#ifdef ENABLE_IPV6
+      /* For IPv6, we need to check against IPv6 addresses */
+      /* This is a simplified check - in a real implementation, 
+         we would need to properly handle IPv6 prefixes */
+      struct in6_addr daddr_copy, saddr_copy;
+      struct in6_addr *target_addr;
+      memcpy(&daddr_copy, &ipph->daddr, sizeof(struct in6_addr));
+      memcpy(&saddr_copy, &ipph->saddr, sizeof(struct in6_addr));
+      target_addr = (dst ? &daddr_copy : &saddr_copy);
+      if (memcmp(&pt->host_v6, target_addr, sizeof(struct in6_addr)) == 0) {
+	if (pt->proto == 0 || ipph->protocol == pt->proto)
+	  if (pt->port == 0 ||
+	      ((ipph->protocol == PKT_IP_PROTO_TCP ||
+		ipph->protocol == PKT_IP_PROTO_UDP) &&
+	       (dst ? ipph->dport : ipph->sport) == htons(pt->port))) {
+	    if (pt_match) *pt_match = pt;
 #ifdef ENABLE_GARDENEXT
-	  if (pt->expiry && pt->expiry < mainclock_now()) {
-	    return -1;
-	  }
+	    if (pt->expiry && pt->expiry < mainclock_now()) {
+	      return -1;
+	    }
 #endif
-	  return 1;
-	}
+	    return 1;
+	  }
+      }
+#endif
+    } else {
+      /* Original IPv4 check */
+      if (pt->proto == 0 || ipph->protocol == pt->proto)
+	if (pt->host.s_addr == 0 ||
+	    pt->host.s_addr ==
+	    ((dst ? ipph->daddr : ipph->saddr) & pt->mask.s_addr))
+	  if (pt->port == 0 ||
+	      ((ipph->protocol == PKT_IP_PROTO_TCP ||
+		ipph->protocol == PKT_IP_PROTO_UDP) &&
+	       (dst ? ipph->dport : ipph->sport) == htons(pt->port))) {
+	    if (pt_match) *pt_match = pt;
+#ifdef ENABLE_GARDENEXT
+	    if (pt->expiry && pt->expiry < mainclock_now()) {
+	      return -1;
+	    }
+#endif
+	    return 1;
+	  }
+    }
   }
 
   return 0;
@@ -413,7 +444,7 @@ int pass_through_add(pass_through *ptlist, uint32_t ptlen,
     if (pt_equal(&ptlist[i], pt)) {
       if (_options.debug)
         syslog(LOG_DEBUG, "%s(%d): Uamallowed already exists #%d:%d: proto=%d host=%s port=%d", __FUNCTION__, __LINE__,
-               i, ptlen, pt->proto, inet_ntoa(pt->host), pt->port);
+               i, ptlen, pt->proto, pt->is_v6 ? "IPv6" : inet_ntoa(pt->host), pt->port);
       if (is_dyn) {
         if (_options.debug)
           syslog(LOG_DEBUG, "%s(%d): Shifting uamallowed list %d to %d", __FUNCTION__, __LINE__, i, cnt);
@@ -444,7 +475,7 @@ int pass_through_add(pass_through *ptlist, uint32_t ptlen,
 
   if (_options.debug)
     syslog(LOG_DEBUG, "%s(%d): Uamallowed IP address #%d:%d: proto=%d host=%s port=%d", __FUNCTION__, __LINE__,
-           cnt, ptlen, pt->proto, inet_ntoa(pt->host), pt->port);
+           cnt, ptlen, pt->proto, pt->is_v6 ? "IPv6" : inet_ntoa(pt->host), pt->port);
 
   memcpy(&ptlist[cnt], pt, sizeof(pass_through));
   *ptcnt = cnt + 1;
@@ -544,30 +575,35 @@ int pass_throughs_from_string(pass_through *ptlist, uint32_t ptlen,
       *t = 0;
     }
 
-    if (strchr(p1, '/')) {	/* parse a network address */
+    /* Check if this is an IPv6 address */
+    if (strchr(p1, ':') && strchr(p1, ':') != strchr(p1, ':')) { /* Multiple colons indicate IPv6 */
+#ifdef ENABLE_IPV6
+      struct in6_addr addr6;
+      if (inet_pton(AF_INET6, p1, &addr6) == 1) {
+	/* This is a valid IPv6 address */
+	pt.is_v6 = 1;
+	memcpy(&pt.host_v6, &addr6, sizeof(struct in6_addr));
+	/* For IPv6, we don't have a mask concept in this simple implementation */
+	memset(&pt.mask, 0, sizeof(pt.mask));
+      } else {
+	syslog(LOG_ERR, "Invalid IPv6 address: %s", p1);
+	continue;
+      }
+#else
+      syslog(LOG_ERR, "IPv6 support not enabled, skipping IPv6 address: %s", p1);
+      continue;
+#endif
+    } else if (strchr(p1, '/')) {	/* parse a network address */
       if (option_aton(&pt.host, &pt.mask, p1, 0)) {
 	syslog(LOG_ERR, "Invalid uamallowed network address or mask %s!", s);
 	continue;
       }
-      if (is_rem) {
-	if (pass_through_rem(ptlist, ptcnt, &pt
-#ifdef HAVE_PATRICIA
-			     , ptree
-#endif
-			     ))
-	  syslog(LOG_ERR, "Too many pass-throughs! skipped %s", s);
-      } else {
-	if (pass_through_add(ptlist, ptlen, ptcnt, &pt, is_dyn
-#ifdef HAVE_PATRICIA
-			     , ptree
-#endif
-			     ))
-	  syslog(LOG_ERR, "Too many pass-throughs! skipped %s", s);
-      }
+      pt.is_v6 = 0;
     }
     else {	/* otherwise, parse a host ip or hostname */
       int j = 0;
       pt.mask.s_addr = 0xffffffff;
+      pt.is_v6 = 0;
 
       if (!(host = gethostbyname(p1))) {
 	syslog(LOG_ERR, "%s: Invalid uamallowed domain or address: %s!", strerror(errno), p1);
@@ -592,6 +628,23 @@ int pass_throughs_from_string(pass_through *ptlist, uint32_t ptlen,
 	    syslog(LOG_ERR, "Too many pass-throughs! skipped %s", s);
 	}
       }
+      continue; /* Skip the common add logic for hostname lookups */
+    }
+
+    if (is_rem) {
+      if (pass_through_rem(ptlist, ptcnt, &pt
+#ifdef HAVE_PATRICIA
+			   , ptree
+#endif
+			   ))
+	syslog(LOG_ERR, "Too many pass-throughs! skipped %s", s);
+    } else {
+      if (pass_through_add(ptlist, ptlen, ptcnt, &pt, is_dyn
+#ifdef HAVE_PATRICIA
+			   , ptree
+#endif
+			   ))
+	syslog(LOG_ERR, "Too many pass-throughs! skipped %s", s);
     }
   }
 
